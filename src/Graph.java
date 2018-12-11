@@ -1,8 +1,6 @@
 import javafx.scene.Cursor;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
-import javafx.scene.text.Text;
-import jdk.nashorn.api.tree.CatchTree;
 
 import java.io.*;
 import java.util.*;
@@ -11,11 +9,8 @@ public class Graph extends Pane {
 
     private HashMap<Node, HashSet<Node>> nodes;
     private HashSet<Edge> edges;
-    private boolean displayDegrees;
 
     public Graph(){
-        //setWidth(500);
-        //setHeight(500);
         setBorder(new Border(new BorderStroke(Color.BLACK, BorderStrokeStyle.SOLID, CornerRadii.EMPTY, BorderWidths.DEFAULT)));
         nodes = new HashMap<>();
         edges = new HashSet<>();
@@ -348,6 +343,7 @@ public class Graph extends Pane {
             builder.append("\\item Number of nodes: " + nodes.keySet().size() + "\n");
             builder.append("\\item Number of edges: " + this.edges.size() + "\n");
             builder.append("\\item Is Bipartite: " + (bipartition() != null ? "Yes" : "No") + "\n");
+            builder.append("\\item Is Connected: " + (isConnected() ? "Yes" : "No") + "\n");
             builder.append("\\end{itemize}");
         }
 
@@ -408,7 +404,7 @@ public class Graph extends Pane {
                         node.setCenterY(e.getY());
                     }
                     else{
-                        System.out.println("FALSE");
+                        System.out.println("Out of bounds (" + e.getX() + "," + e.getY() + ")");
                     }
                 });
 
@@ -428,36 +424,91 @@ public class Graph extends Pane {
         }
     }
 
-    public Stack<Node> shortestPath(Node start, Node end){
-        HashSet<Node> visitedNodes = new HashSet<>();
+//    public Stack<Node> shortestPath(Node start, Node end){
+//
+//        HashSet<Node> visitedNodes = new HashSet<>();
+//        Node[] vertices = this.getNodes().toArray(new Node[this.getNodes().size()]);
+//        Node[] previousVertices = new Node[vertices.length];
+//        double[] shortestDistances = new double[vertices.length];
+//
+//        for(int i = 0 ; i < shortestDistances.length ; i++){
+//            if(vertices[i].equals(start)) shortestDistances[i] = 0;
+//            else shortestDistances[i] = Double.MAX_VALUE;
+//        }
+//
+//        while(visitedNodes.size() < vertices.length){
+//
+//            // Determine the closest node in the unvisited set.
+//            int minIndex = 0;
+//            double minDist = Double.MAX_VALUE;
+//            for(int i = 0 ; i < shortestDistances.length ; i++){
+//                if(!visitedNodes.contains(vertices[i]) && shortestDistances[i] < minDist){
+//                    minDist = shortestDistances[i];
+//                    minIndex = i;
+//                }
+//            }
+//
+//            Node current = vertices[minIndex];
+//            HashSet<Node> adjacentVertices = nodes.get(current);
+//
+//            for(int i = 0 ; i < vertices.length ; i++){
+//                if(!visitedNodes.contains(vertices[i]) && adjacentVertices.contains(vertices[i])){
+//                    double distToStart = minDist + current.distanceTo(vertices[i]);
+//                    if(distToStart < shortestDistances[i]){
+//                        shortestDistances[i] = distToStart;
+//                        previousVertices[i] = current;
+//                    }
+//                }
+//            }
+//
+//            visitedNodes.add(current);
+//        }
+//
+//        Stack<Node> path = new Stack<>();
+//        path.push(end);
+//        while(!path.peek().equals(start)){
+//            for(int i = 0 ; i < vertices.length ; i++){
+//                if(vertices[i].equals(path.peek()) && previousVertices[i] != null){
+//                    path.push(previousVertices[i]);
+//                }
+//            }
+//        }
+//
+//        return path;
+//    }
 
+    public Stack<Node> shortestPath(Node start, Node end){
+
+        HashSet<Node> visitedNodes = new HashSet<>();
         Node[] vertices = this.getNodes().toArray(new Node[this.getNodes().size()]);
         Node[] previousVertices = new Node[vertices.length];
         double[] shortestDistances = new double[vertices.length];
+
+        LinkedList<Node> toVisit = new LinkedList<>();
+        toVisit.offer(start);
 
         for(int i = 0 ; i < shortestDistances.length ; i++){
             if(vertices[i].equals(start)) shortestDistances[i] = 0;
             else shortestDistances[i] = Double.MAX_VALUE;
         }
 
-        while(visitedNodes.size() < vertices.length){
+        while(!toVisit.isEmpty()){
 
-            // Determine the closest node in the unvisited set.
-            int minIndex = 0;
+            // Determine the closest node in the unvisited set
             double minDist = Double.MAX_VALUE;
             for(int i = 0 ; i < shortestDistances.length ; i++){
                 if(!visitedNodes.contains(vertices[i]) && shortestDistances[i] < minDist){
                     minDist = shortestDistances[i];
-                    minIndex = i;
                 }
             }
 
-            Node current = vertices[minIndex];
+            Node current = toVisit.poll();
             HashSet<Node> adjacentVertices = nodes.get(current);
 
             for(int i = 0 ; i < vertices.length ; i++){
                 if(!visitedNodes.contains(vertices[i]) && adjacentVertices.contains(vertices[i])){
                     double distToStart = minDist + current.distanceTo(vertices[i]);
+                    toVisit.offer(vertices[i]);
                     if(distToStart < shortestDistances[i]){
                         shortestDistances[i] = distToStart;
                         previousVertices[i] = current;
@@ -481,24 +532,34 @@ public class Graph extends Pane {
         return path;
     }
 
+
+
     public HashSet<Node>[] bipartition(){
 
         if(isEmpty()) return null;
 
         HashSet<Node> leftSide = new HashSet<>();
         HashSet<Node> rightSide = new HashSet<>();
-        HashSet<Node> visited = new HashSet<>();
+        HashSet<Node> unvisited = getNodes();
         LinkedList<Node> toVisit = new LinkedList<>();
 
-        Node firstNode = new ArrayList<Node>(this.getNodes()).get(0);
-        visited.add(firstNode);
-        leftSide.add(firstNode);
-        toVisit.offer(firstNode);
-        while(!toVisit.isEmpty()){
-            Node current = toVisit.poll();
+        while(unvisited.size() > 0){
+
+            Node current;
+            if(!toVisit.isEmpty())
+                current = toVisit.poll();
+            else{
+                current = new ArrayList<>(unvisited).get(0);
+                unvisited.remove(current);
+                if(Math.random() > 0.5)
+                    leftSide.add(current);
+                else
+                    rightSide.add(current);
+            }
+
             for(Node adjacentNode : this.nodes.get(current)){
-                if(!visited.contains(adjacentNode)){
-                    visited.add(adjacentNode);
+                if(unvisited.contains(adjacentNode)){
+                    unvisited.remove(adjacentNode);
                     toVisit.offer(adjacentNode);
                 }
                 if(rightSide.contains(current)){
